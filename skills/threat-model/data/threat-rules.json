@@ -1,0 +1,875 @@
+{
+  "_meta": {
+    "purpose": "Curated STRIDE threat rules for iac-tools:threat-model. Each rule matches a semantic node kind (from graph_semantics.TYPE_MAP) and attribute conditions, and names the Checkov rules whose PASS marks the threat mitigated.",
+    "governance": [
+      "STATIC, CHECKED-IN, HUMAN-REVIEWED DATA. The model never adds, removes, or re-scores a rule at runtime.",
+      "Every id in `mitigations` MUST exist in security-scan/data/rule-severity.json or security-scan/data/control-map.json. tests/test_threat_rules.py enforces this.",
+      "NIST 800-53 control IDs reach a threat by exactly two routes: (1) a Checkov id in `mitigations` that control-map.json maps, or (2) an explicit `nist_800_53` list on the rule that carries `source: \"curated\"` and a written `rationale`, and whose IDs already appear in the checked-in control vocabulary. Anything else is dropped and logged. When in doubt, cite none.",
+      "A rule with `mitigations: []` describes a weakness no Checkov check can offset. With Checkov data present it reports `unmitigated`; without Checkov data every threat reports `unknown`.",
+      "`threat` text is a statement about the architecture, not about the IaC author. Names from the IaC are untrusted and are only ever substituted into the {id} placeholder."
+    ],
+    "conditionGrammar": {
+      "kinds": "list of semantic kinds, or [\"*\"] for any kind",
+      "when": "object; every entry must hold. key = dotted path into the node (`kind`, `type`, `flags.x`). value = literal (equality; null means missing) or an operator object: eq, ne, in, not_in, exists, nonempty, gte, lte, lt, gt, contains, any_in",
+      "when_any": "optional list of `when` objects; at least one must hold in addition to `when`",
+      "evidence": "flag paths copied into the threat so the reader sees why it fired",
+      "evidenceAddresses": "flag paths holding resource addresses that also count when matching Checkov results (an SG rule resource, a listener)"
+    },
+    "stride": [
+      "Spoofing",
+      "Tampering",
+      "Repudiation",
+      "Information Disclosure",
+      "Denial of Service",
+      "Elevation of Privilege"
+    ],
+    "severities": [
+      "critical",
+      "high",
+      "medium",
+      "low"
+    ],
+    "reviewed": {
+      "by": "John P. Sasser",
+      "status": "PENDING GATE REVIEW",
+      "note": "Curated 2026-10-06 for threat-model v1. The four curated nist_800_53 entries reuse the control that control-map.json assigns to the sibling Checkov concept; each rationale names that sibling."
+    }
+  },
+  "rules": [
+    {
+      "id": "TM-NET-001",
+      "title": "Internet-facing load balancer without a WAF",
+      "stride": "Denial of Service",
+      "severity": "medium",
+      "kinds": [
+        "load_balancer"
+      ],
+      "when": {
+        "flags.public": true,
+        "flags.entrypoint": true,
+        "flags.waf": false
+      },
+      "threat": "{id} accepts traffic from any internet address with no web application firewall in front of it. An attacker can flood it or probe the application behind it without any request filtering.",
+      "evidence": [
+        "flags.security_groups"
+      ],
+      "mitigations": [
+        "CKV2_AWS_28"
+      ]
+    },
+    {
+      "id": "TM-NET-002",
+      "title": "Public load balancer accepts plain HTTP",
+      "stride": "Information Disclosure",
+      "severity": "high",
+      "kinds": [
+        "load_balancer"
+      ],
+      "when": {
+        "flags.public": true,
+        "flags.http_listener": true
+      },
+      "threat": "{id} has an HTTP listener that forwards traffic instead of redirecting to HTTPS. Credentials and session data cross the internet in clear text and can be read or altered in transit.",
+      "evidence": [
+        "flags.http_listeners"
+      ],
+      "evidenceAddresses": [
+        "flags.http_listeners"
+      ],
+      "mitigations": [
+        "CKV_AWS_2",
+        "CKV_AWS_103",
+        "CKV2_AWS_20"
+      ]
+    },
+    {
+      "id": "TM-NET-003",
+      "title": "Load balancer without access logs",
+      "stride": "Repudiation",
+      "severity": "medium",
+      "kinds": [
+        "load_balancer"
+      ],
+      "when": {
+        "flags.access_logging": false
+      },
+      "threat": "{id} does not write access logs. Requests that reach the application leave no record, so an attack cannot be reconstructed or attributed afterwards.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_91"
+      ]
+    },
+    {
+      "id": "TM-NET-004",
+      "title": "Administrative port open to the internet",
+      "stride": "Elevation of Privilege",
+      "severity": "high",
+      "kinds": [
+        "security_group"
+      ],
+      "when": {
+        "flags.open_admin_ports": {
+          "nonempty": true
+        }
+      },
+      "threat": "{id} allows SSH, RDP, or WinRM from any internet address. Password guessing and credential replay against the attached hosts need no foothold inside the network.",
+      "evidence": [
+        "flags.open_admin_ports",
+        "flags.attached"
+      ],
+      "evidenceAddresses": [
+        "flags.open_ingress[].via"
+      ],
+      "mitigations": [
+        "CKV_AWS_24",
+        "CKV_AWS_25"
+      ]
+    },
+    {
+      "id": "TM-NET-005",
+      "title": "Database port open to the internet",
+      "stride": "Information Disclosure",
+      "severity": "high",
+      "kinds": [
+        "security_group"
+      ],
+      "when": {
+        "flags.open_db_ports": {
+          "nonempty": true
+        }
+      },
+      "threat": "{id} allows a database or cache port from any internet address. The data store behind it is one credential away from direct read and write access.",
+      "evidence": [
+        "flags.open_db_ports",
+        "flags.attached"
+      ],
+      "evidenceAddresses": [
+        "flags.open_ingress[].via"
+      ],
+      "mitigations": [],
+      "nist_800_53": [
+        "SC-7"
+      ],
+      "source": "curated",
+      "rationale": "Network-level public exposure of a data port. control-map.json assigns SC-7 (boundary protection) to the sibling port-specific checks CKV_AWS_24, CKV_AWS_25 and CKV_AWS_277; Checkov has no check for database ports, so the same control is applied by analogy."
+    },
+    {
+      "id": "TM-NET-006",
+      "title": "All ports open to the internet",
+      "stride": "Tampering",
+      "severity": "critical",
+      "kinds": [
+        "security_group"
+      ],
+      "when": {
+        "flags.open_all_ports": true
+      },
+      "threat": "{id} allows every port and protocol from any internet address. Every service on the attached hosts is reachable, including ones that were never meant to be exposed.",
+      "evidence": [
+        "flags.attached"
+      ],
+      "evidenceAddresses": [
+        "flags.open_ingress[].via"
+      ],
+      "mitigations": [
+        "CKV_AWS_277"
+      ]
+    },
+    {
+      "id": "TM-NET-007",
+      "title": "Internet ingress on a non-web port",
+      "stride": "Information Disclosure",
+      "severity": "medium",
+      "kinds": [
+        "security_group"
+      ],
+      "when": {
+        "flags.open_nonweb_ingress": {
+          "nonempty": true
+        },
+        "flags.open_all_ports": false
+      },
+      "threat": "{id} allows internet traffic on ports other than 80 and 443. Services on those ports are usually not hardened for public exposure.",
+      "evidence": [
+        "flags.open_nonweb_ingress",
+        "flags.attached"
+      ],
+      "evidenceAddresses": [
+        "flags.open_ingress[].via"
+      ],
+      "mitigations": []
+    },
+    {
+      "id": "TM-NET-008",
+      "title": "Subnet assigns public IP addresses by default",
+      "stride": "Information Disclosure",
+      "severity": "low",
+      "kinds": [
+        "subnet"
+      ],
+      "when": {
+        "flags.public_ip_on_launch": true
+      },
+      "threat": "Every instance launched into {id} receives a public IP address unless the launch overrides it. Resources become internet-reachable by default rather than by decision.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_130"
+      ]
+    },
+    {
+      "id": "TM-NET-009",
+      "title": "Compute with a public IP address",
+      "stride": "Tampering",
+      "severity": "medium",
+      "kinds": [
+        "instance",
+        "launch_template",
+        "launch_configuration"
+      ],
+      "when": {
+        "flags.public_ip": true
+      },
+      "threat": "{id} is reachable directly from the internet instead of through a load balancer. Its security group is the only control between an attacker and the host.",
+      "evidence": [
+        "flags.public_ip_reason",
+        "flags.security_groups"
+      ],
+      "mitigations": [
+        "CKV_AWS_88"
+      ]
+    },
+    {
+      "id": "TM-NET-010",
+      "title": "VPC without flow logs",
+      "stride": "Repudiation",
+      "severity": "medium",
+      "kinds": [
+        "vpc"
+      ],
+      "when": {
+        "flags.flow_logs": false
+      },
+      "threat": "{id} does not record network flows. Lateral movement and data exfiltration inside the VPC leave no trace.",
+      "evidence": [],
+      "mitigations": [
+        "CKV2_AWS_11"
+      ]
+    },
+    {
+      "id": "TM-API-001",
+      "title": "Public API without a WAF",
+      "stride": "Denial of Service",
+      "severity": "medium",
+      "kinds": [
+        "api_gateway"
+      ],
+      "when": {
+        "flags.public": true,
+        "flags.waf": false
+      },
+      "threat": "{id} is a public API with no web application firewall. Request floods and injection probes reach the backend unfiltered.",
+      "evidence": [
+        "flags.endpoint_types",
+        "flags.stages"
+      ],
+      "mitigations": []
+    },
+    {
+      "id": "TM-API-002",
+      "title": "API stage without access logging",
+      "stride": "Repudiation",
+      "severity": "medium",
+      "kinds": [
+        "api_stage"
+      ],
+      "when": {
+        "flags.access_logging": false
+      },
+      "threat": "{id} does not log API requests. Abuse of the API cannot be detected or reconstructed.",
+      "evidence": [
+        "flags.api"
+      ],
+      "mitigations": [
+        "CKV_AWS_76"
+      ]
+    },
+    {
+      "id": "TM-API-003",
+      "title": "API method without authorization",
+      "stride": "Spoofing",
+      "severity": "high",
+      "kinds": [
+        "api_gateway"
+      ],
+      "when": {
+        "flags.unauthenticated_methods": {
+          "nonempty": true
+        }
+      },
+      "threat": "{id} exposes methods with authorization NONE. Anyone can call them as if they were a legitimate client.",
+      "evidence": [
+        "flags.unauthenticated_methods"
+      ],
+      "evidenceAddresses": [
+        "flags.unauthenticated_methods"
+      ],
+      "mitigations": []
+    },
+    {
+      "id": "TM-CDN-001",
+      "title": "CloudFront serves over plain HTTP",
+      "stride": "Information Disclosure",
+      "severity": "medium",
+      "kinds": [
+        "cloudfront_distribution"
+      ],
+      "when": {
+        "flags.http_allowed": true
+      },
+      "threat": "{id} allows viewers to connect over HTTP. Content and cookies can be read or altered on the path to the viewer.",
+      "evidence": [],
+      "mitigations": []
+    },
+    {
+      "id": "TM-CDN-002",
+      "title": "CloudFront without a WAF",
+      "stride": "Denial of Service",
+      "severity": "medium",
+      "kinds": [
+        "cloudfront_distribution"
+      ],
+      "when": {
+        "flags.waf": false
+      },
+      "threat": "{id} has no web ACL. Request floods and injection probes pass through to the origin.",
+      "evidence": [],
+      "mitigations": []
+    },
+    {
+      "id": "TM-DATA-001",
+      "title": "Publicly accessible database",
+      "stride": "Information Disclosure",
+      "severity": "critical",
+      "kinds": [
+        "rds_instance",
+        "rds_cluster",
+        "redshift_cluster"
+      ],
+      "when": {
+        "flags.public": true
+      },
+      "threat": "{id} is configured as publicly accessible. If its security group or subnet routing ever opens, the database is directly on the internet.",
+      "evidence": [
+        "flags.security_groups",
+        "flags.public_but_closed"
+      ],
+      "mitigations": [
+        "CKV_AWS_17",
+        "CKV_AWS_87"
+      ]
+    },
+    {
+      "id": "TM-DATA-002",
+      "title": "Public S3 bucket",
+      "stride": "Information Disclosure",
+      "severity": "critical",
+      "kinds": [
+        "s3_bucket"
+      ],
+      "when": {
+        "flags.public": true
+      },
+      "threat": "{id} grants access to everyone through its ACL or bucket policy, and no public access block stops it. Its objects can be listed, read, or written from the internet.",
+      "evidence": [
+        "flags.public_acl",
+        "flags.public_policy",
+        "flags.public_access_block"
+      ],
+      "mitigations": [
+        "CKV_AWS_20",
+        "CKV_AWS_57",
+        "CKV_AWS_70",
+        "CKV_AWS_53",
+        "CKV_AWS_54",
+        "CKV_AWS_55",
+        "CKV_AWS_56"
+      ]
+    },
+    {
+      "id": "TM-DATA-003",
+      "title": "Database storage not encrypted at rest",
+      "stride": "Information Disclosure",
+      "severity": "high",
+      "kinds": [
+        "rds_instance",
+        "rds_cluster",
+        "redshift_cluster"
+      ],
+      "when": {
+        "flags.encrypted": false
+      },
+      "threat": "{id} stores data without encryption at rest. Snapshots, backups, and the underlying volumes expose the data in clear text to anyone who obtains them.",
+      "evidence": [
+        "flags.engine"
+      ],
+      "mitigations": [
+        "CKV_AWS_16"
+      ]
+    },
+    {
+      "id": "TM-DATA-004",
+      "title": "DynamoDB table without a customer managed key",
+      "stride": "Information Disclosure",
+      "severity": "medium",
+      "kinds": [
+        "dynamodb_table"
+      ],
+      "when": {
+        "flags.encrypted_cmk": false
+      },
+      "threat": "{id} relies on the AWS owned key. Access to the data cannot be revoked or audited through a key policy.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_119"
+      ]
+    },
+    {
+      "id": "TM-DATA-005",
+      "title": "S3 bucket without server-side encryption",
+      "stride": "Information Disclosure",
+      "severity": "medium",
+      "kinds": [
+        "s3_bucket"
+      ],
+      "when": {
+        "flags.encrypted": false
+      },
+      "threat": "{id} has no default encryption configuration declared. Objects written without an explicit encryption header are stored in clear text.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_19",
+        "CKV_AWS_145"
+      ]
+    },
+    {
+      "id": "TM-DATA-006",
+      "title": "EFS file system not encrypted",
+      "stride": "Information Disclosure",
+      "severity": "high",
+      "kinds": [
+        "efs_file_system"
+      ],
+      "when": {
+        "flags.encrypted": false
+      },
+      "threat": "{id} stores files without encryption at rest. Backups and the storage layer expose file contents in clear text.",
+      "evidence": [],
+      "mitigations": [],
+      "nist_800_53": [
+        "SC-28"
+      ],
+      "source": "curated",
+      "rationale": "Encryption of data at rest. control-map.json assigns SC-28 to the sibling at-rest checks CKV_AWS_16 (RDS) and CKV_AWS_19 (S3); the EFS check CKV_AWS_42 is not in the map, so the same control is applied by analogy."
+    },
+    {
+      "id": "TM-DATA-008",
+      "title": "Database without deletion protection",
+      "stride": "Tampering",
+      "severity": "medium",
+      "kinds": [
+        "rds_instance",
+        "rds_cluster"
+      ],
+      "when": {
+        "flags.deletion_protection": false
+      },
+      "threat": "{id} can be deleted by a single API call. A compromised deployer credential or a mistaken apply destroys the data store.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_293"
+      ]
+    },
+    {
+      "id": "TM-DATA-009",
+      "title": "Database without log exports",
+      "stride": "Repudiation",
+      "severity": "medium",
+      "kinds": [
+        "rds_instance",
+        "rds_cluster"
+      ],
+      "when": {
+        "flags.logging": false
+      },
+      "threat": "{id} does not export its engine logs. Failed logins and slow or unusual queries are not available for detection.",
+      "evidence": [],
+      "mitigations": []
+    },
+    {
+      "id": "TM-DATA-010",
+      "title": "S3 bucket without access logging",
+      "stride": "Repudiation",
+      "severity": "medium",
+      "kinds": [
+        "s3_bucket"
+      ],
+      "when": {
+        "flags.logging": false
+      },
+      "threat": "{id} does not log object access. Bulk downloads cannot be detected or proven after the fact.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_18"
+      ]
+    },
+    {
+      "id": "TM-DATA-013",
+      "title": "Public database snapshot",
+      "stride": "Information Disclosure",
+      "severity": "critical",
+      "kinds": [
+        "db_snapshot"
+      ],
+      "when": {
+        "flags.public": true
+      },
+      "threat": "{id} is shared with every AWS account. Anyone can restore it and read the full database.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_302"
+      ],
+      "formats": [
+        "terraform"
+      ]
+    },
+    {
+      "id": "TM-DATA-015",
+      "title": "KMS key policy with a wildcard principal",
+      "stride": "Elevation of Privilege",
+      "severity": "high",
+      "kinds": [
+        "kms_key"
+      ],
+      "when": {
+        "flags.wildcard_principal": true
+      },
+      "threat": "The key policy of {id} grants a statement to every principal without a condition. Anyone who can reach the key can use or administer it.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_33"
+      ]
+    },
+    {
+      "id": "TM-IAM-001",
+      "title": "Policy allows every action",
+      "stride": "Elevation of Privilege",
+      "severity": "critical",
+      "kinds": [
+        "iam_inline_policy",
+        "iam_policy"
+      ],
+      "when": {
+        "flags.wildcard_actions": true
+      },
+      "threat": "{id} grants Action \"*\". Whoever holds the attached identity can perform any operation the resource list allows, including changing permissions.",
+      "evidence": [
+        "flags.wildcard_resource",
+        "flags.admin"
+      ],
+      "mitigations": [
+        "CKV_AWS_63",
+        "CKV_AWS_49"
+      ]
+    },
+    {
+      "id": "TM-IAM-002",
+      "title": "Full administrative access",
+      "stride": "Elevation of Privilege",
+      "severity": "critical",
+      "kinds": [
+        "iam_inline_policy",
+        "iam_policy",
+        "iam_role"
+      ],
+      "when": {
+        "flags.admin": true
+      },
+      "threat": "{id} carries \"*\" on \"*\" or the AdministratorAccess policy. Compromise of the identity is compromise of the account.",
+      "evidence": [
+        "flags.managed_policies"
+      ],
+      "mitigations": [
+        "CKV_AWS_62",
+        "CKV_AWS_274"
+      ]
+    },
+    {
+      "id": "TM-IAM-003",
+      "title": "Service-wide wildcard action",
+      "stride": "Elevation of Privilege",
+      "severity": "high",
+      "kinds": [
+        "iam_inline_policy",
+        "iam_policy"
+      ],
+      "when": {
+        "flags.service_wildcard_actions": {
+          "nonempty": true
+        }
+      },
+      "threat": "{id} grants every action of a service (for example dynamodb:*). A read-only workload can delete tables, change encryption, or export data. No Checkov check detects a service-scoped wildcard.",
+      "evidence": [
+        "flags.service_wildcard_actions"
+      ],
+      "mitigations": [],
+      "nist_800_53": [
+        "AC-6"
+      ],
+      "source": "curated",
+      "rationale": "Least privilege. control-map.json assigns AC-6 to the sibling wildcard checks CKV_AWS_63 (Action *) and CKV_AWS_355 (Resource *); a service-scoped wildcard is the same concept at a narrower scope and has no Checkov check, so the same control is applied by analogy."
+    },
+    {
+      "id": "TM-IAM-004",
+      "title": "Wildcard resource",
+      "stride": "Elevation of Privilege",
+      "severity": "medium",
+      "kinds": [
+        "iam_inline_policy",
+        "iam_policy"
+      ],
+      "when": {
+        "flags.wildcard_resource": true,
+        "flags.admin": false
+      },
+      "threat": "{id} grants actions on Resource \"*\". The identity can act on every resource of that service in the account, not only the ones this stack owns.",
+      "evidence": [
+        "flags.wildcard_resource_actions"
+      ],
+      "mitigations": [
+        "CKV_AWS_355",
+        "CKV_AWS_290",
+        "CKV_AWS_111"
+      ]
+    },
+    {
+      "id": "TM-IAM-005",
+      "title": "Privilege escalation actions",
+      "stride": "Elevation of Privilege",
+      "severity": "high",
+      "kinds": [
+        "iam_inline_policy",
+        "iam_policy"
+      ],
+      "when": {
+        "flags.privesc_actions": {
+          "nonempty": true
+        }
+      },
+      "threat": "{id} grants actions that can be used to gain more privilege (PassRole, policy versioning, attaching policies, AssumeRole). The identity can become a more powerful one.",
+      "evidence": [
+        "flags.privesc_actions"
+      ],
+      "mitigations": [
+        "CKV_AWS_286",
+        "CKV_AWS_110",
+        "CKV_AWS_289",
+        "CKV_AWS_109"
+      ]
+    },
+    {
+      "id": "TM-IAM-006",
+      "title": "Role assumable by anyone",
+      "stride": "Spoofing",
+      "severity": "critical",
+      "kinds": [
+        "iam_role"
+      ],
+      "when": {
+        "flags.trust_wildcard": true
+      },
+      "threat": "The trust policy of {id} names Principal \"*\". Any AWS account can assume this role and act with its permissions.",
+      "evidence": [
+        "flags.trust_conditioned"
+      ],
+      "mitigations": [
+        "CKV_AWS_60",
+        "CKV_AWS_61"
+      ]
+    },
+    {
+      "id": "TM-IAM-007",
+      "title": "External or federated trust without a condition",
+      "stride": "Spoofing",
+      "severity": "medium",
+      "kinds": [
+        "iam_role"
+      ],
+      "when": {
+        "flags.trust_conditioned": false,
+        "flags.trust_wildcard": false
+      },
+      "when_any": [
+        {
+          "flags.trust_external_account": {
+            "nonempty": true
+          }
+        },
+        {
+          "flags.trust_federated": {
+            "nonempty": true
+          }
+        }
+      ],
+      "threat": "{id} trusts another account or an identity provider with no Condition on the statement. Any identity that principal vouches for can assume the role; a confused-deputy or audience mismatch becomes a login.",
+      "evidence": [
+        "flags.trust_external_account",
+        "flags.trust_federated"
+      ],
+      "mitigations": []
+    },
+    {
+      "id": "TM-CMP-001",
+      "title": "IMDSv1 allowed",
+      "stride": "Elevation of Privilege",
+      "severity": "high",
+      "kinds": [
+        "instance",
+        "launch_template",
+        "launch_configuration"
+      ],
+      "when": {
+        "flags.imdsv2": false
+      },
+      "threat": "{id} does not require IMDSv2. A server-side request forgery in the application can read the instance role credentials from the metadata service and use them from anywhere.",
+      "evidence": [],
+      "mitigations": [
+        "CKV_AWS_79"
+      ]
+    },
+    {
+      "id": "TM-CMP-002",
+      "title": "Secret stored in a plain attribute",
+      "stride": "Information Disclosure",
+      "severity": "critical",
+      "kinds": [
+        "*"
+      ],
+      "when": {
+        "flags.plaintext_secrets": {
+          "nonempty": true
+        }
+      },
+      "threat": "{id} carries a credential as a literal value. It is in version control, in the plan output, and in the state file; anyone with read access to any of them holds the secret.",
+      "evidence": [
+        "flags.plaintext_secrets"
+      ],
+      "mitigations": [],
+      "nist_800_53": [
+        "IA-5"
+      ],
+      "source": "curated",
+      "rationale": "Authenticator management. control-map.json assigns IA-5 to the hardcoded-secret checks CKV_AWS_41, CKV_AWS_45 and CKV_AWS_46. Those checks are not cited as mitigations here because CKV_AWS_45 passes on tf-02's Lambda while three literal secrets remain in its environment (answer-key TF-02-5); a pass must not flip a structurally present secret to mitigated."
+    },
+    {
+      "id": "TM-CMP-003",
+      "title": "EBS volume explicitly not encrypted",
+      "stride": "Information Disclosure",
+      "severity": "medium",
+      "kinds": [
+        "instance",
+        "launch_template",
+        "launch_configuration"
+      ],
+      "when": {
+        "flags.ebs_unencrypted_explicit": true
+      },
+      "threat": "{id} declares a block device with encryption off. Snapshots of the volume expose its contents in clear text.",
+      "evidence": [],
+      "mitigations": []
+    },
+    {
+      "id": "TM-CMP-004",
+      "title": "Lambda environment not encrypted with a customer key",
+      "stride": "Information Disclosure",
+      "severity": "low",
+      "kinds": [
+        "lambda_function"
+      ],
+      "when": {
+        "flags.env_var_count": {
+          "gte": 1
+        },
+        "flags.env_kms": false
+      },
+      "threat": "{id} stores environment variables under the default key. Anyone with lambda:GetFunctionConfiguration reads them; a customer key would require kms:Decrypt as well.",
+      "evidence": [
+        "flags.env_var_count"
+      ],
+      "mitigations": [
+        "CKV_AWS_173"
+      ]
+    },
+    {
+      "id": "TM-CMP-005",
+      "title": "Lambda invokable by anyone",
+      "stride": "Spoofing",
+      "severity": "high",
+      "kinds": [
+        "lambda_function"
+      ],
+      "when": {
+        "flags.public": true
+      },
+      "threat": "{id} can be invoked from the internet without authentication, through a function URL with no auth or a permission granted to Principal \"*\".",
+      "evidence": [
+        "flags.public_url",
+        "flags.public_permission"
+      ],
+      "evidenceAddresses": [
+        "flags.public_url",
+        "flags.public_permission"
+      ],
+      "mitigations": [
+        "CKV_AWS_301"
+      ]
+    },
+    {
+      "id": "TM-CMP-006",
+      "title": "Privileged container",
+      "stride": "Elevation of Privilege",
+      "severity": "high",
+      "kinds": [
+        "ecs_task_definition"
+      ],
+      "when": {
+        "flags.privileged": true
+      },
+      "threat": "A container in {id} runs privileged. Escape from the container to the host is trivial.",
+      "evidence": [
+        "flags.container_count"
+      ],
+      "mitigations": [
+        "CKV_AWS_334"
+      ]
+    },
+    {
+      "id": "TM-LOG-001",
+      "title": "Log group retention under one year",
+      "stride": "Repudiation",
+      "severity": "low",
+      "kinds": [
+        "log_group"
+      ],
+      "when": {
+        "flags.retention_ok": false
+      },
+      "threat": "{id} discards logs in under a year. Evidence of an intrusion discovered late is already gone.",
+      "evidence": [
+        "flags.retention_days"
+      ],
+      "mitigations": [
+        "CKV_AWS_338"
+      ]
+    }
+  ]
+}

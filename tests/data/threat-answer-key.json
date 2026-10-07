@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "purpose": "Answer key for threat_model.py attack paths. One entry per fixture: the internet-to-data paths the deterministic layer must find, and the fixtures where it must find none.",
+    "governance": [
+      "Checked-in, human-reviewable DATA. tests/test_threat_graph.py grades against it.",
+      "A path matches an expectation when it starts at `entry`, ends at `terminus`, and visits at least one member of each `through` group, in order.",
+      "`exactlyZero: true` means the fixture must yield no attack path at all. Never relax it to make a result look better.",
+      "Edge semantics: a compute resource that merely mentions a data resource's name is NOT an edge. Only IAM permissions and network rules are. That is why tf-02 must pass through the role."
+    ],
+    "pathsNotExpected": {
+      "tf-01-three-tier-webapp": "No IAM path: the EC2 role has CloudWatch and SSM permissions only, none on a data service.",
+      "tf-02-serverless-api": "No network path: nothing is in a VPC. The only route to the table is IAM.",
+      "cfn-01-wordpress-ec2-rds": "The RDS instance is PubliclyAccessible but its security group only admits the web tier, so it is NOT a direct entry point. The SSH 0.0.0.0/0 rule sits on instances in private subnets, so it is a threat, not an entry."
+    }
+  },
+  "fixtures": {
+    "tf-01-three-tier-webapp": {
+      "format": "terraform",
+      "expectedPaths": [
+        {
+          "entry": "aws_lb.main",
+          "through": [["aws_autoscaling_group.main", "aws_launch_template.main"]],
+          "terminus": "aws_db_instance.main",
+          "note": "ALB -> app tier (ASG / launch template) -> RDS, over security-group edges."
+        }
+      ],
+      "entrypoints": ["aws_lb.main"]
+    },
+    "tf-02-serverless-api": {
+      "format": "terraform",
+      "expectedPaths": [
+        {
+          "entry": "aws_api_gateway_rest_api.main",
+          "through": [
+            ["aws_lambda_function.create_item", "aws_lambda_function.get_item", "aws_lambda_function.list_items", "aws_lambda_function.update_item", "aws_lambda_function.delete_item"],
+            ["aws_iam_role.lambda_exec"]
+          ],
+          "terminus": "aws_dynamodb_table.main",
+          "note": "API Gateway -> Lambda -> execution role -> DynamoDB (dynamodb:*). IAM-mediated; the role is a required hop."
+        }
+      ],
+      "entrypoints": ["aws_api_gateway_rest_api.main"]
+    },
+    "cfn-01-wordpress-ec2-rds": {
+      "format": "cloudformation",
+      "expectedPaths": [
+        {
+          "entry": "ApplicationLoadBalancer",
+          "through": [["AutoScalingGroup", "LaunchTemplate"]],
+          "terminus": "DBInstance",
+          "note": "The WordPress stack: ALB -> web tier -> RDS."
+        },
+        {
+          "entry": "ApplicationLoadBalancer",
+          "through": [["AutoScalingGroup", "LaunchTemplate"]],
+          "terminus": "EFSFileSystem",
+          "note": "ALB -> web tier -> EFS, via the instance role's elasticfilesystem:* grants or the NFS security group."
+        }
+      ],
+      "entrypoints": ["ApplicationLoadBalancer"]
+    },
+    "tf-06-hardened-three-tier": {
+      "format": "terraform",
+      "expectedPaths": [],
+      "exactlyZero": true,
+      "entrypoints": [],
+      "note": "Internal ALB, VPC-only security groups, no public IPs. No element is an internet entry point, so there can be no path."
+    }
+  }
+}

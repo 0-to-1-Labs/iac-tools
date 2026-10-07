@@ -1,0 +1,11 @@
+{
+  "name": "iac-tools",
+  "displayName": "IaC Tools",
+  "version": "2.0.0",
+  "description": "Infrastructure as Code toolkit for Claude Code: security scanning with NIST 800-53 / FedRAMP mapping and validated remediation (security-scan), STRIDE threat models with attack paths derived from the resource graph (threat-model), and architecture diagrams rendered with Nano Banana (diagram-generator). Terraform, CloudFormation, Kubernetes, Docker Compose. One shared parser.",
+  "author": { "name": "John P. Sasser", "url": "https://github.com/0-to-1-Labs" },
+  "homepage": "https://github.com/0-to-1-Labs/iac-tools",
+  "repository": "https://github.com/0-to-1-Labs/iac-tools",
+  "license": "MIT",
+  "keywords": ["terraform", "cloudformation", "kubernetes", "docker-compose", "iac", "security", "checkov", "nist-800-53", "fedramp", "threat-model", "stride", "attack-path", "architecture", "diagram", "sarif", "remediation"]
+}

@@ -1,0 +1,27 @@
+# Runtime dependencies for the iac-tools scripts (Python >= 3.9).
+#
+# Without `tfparse` a Terraform scan is DEGRADED (no line numbers, no SARIF, no
+# patches); without `cfn-lint` the same holds for CloudFormation; without
+# `ruamel.yaml` for Kubernetes and Compose. The scan still runs and says so.
+pyyaml>=6.0
+tfparse>=0.6
+cfn-lint>=1.0
+ruamel.yaml>=0.18
+
+# The deterministic rule layer. A FLOOR, not a pin.
+#
+# Grading policy: the checked-in severity seeds (data/rule-severity.json), the
+# control map, the answer keys (tests/data/answer-key*.json) and the corpus
+# counts in the regression harness are graded against EXACTLY checkov 3.3.25
+# (run_checkov.GRADED_CHECKOV_VERSION). Any newer release may run: the adapter
+# records the version it ran (`checkovVersion`) and lists every firing rule
+# with no severity seed (`unseededRules`) as a visible warning in the report.
+# The regression harness asserts that list is empty only when the running
+# version equals the graded one; on a newer version it logs the list and
+# passes. Moving the graded version means re-grading -- owner-reviewed seeds,
+# control-map entries, answer keys and corpus counts -- not just a bump.
+# Re-graded 2026-10-06 (3.2.500 -> 3.3.25: adds CKV_AWS_393, CKV_AWS_394).
+checkov>=3.3.25
+
+# Optional, only for the experimental `--live` read-only verification:
+#   pip install boto3
