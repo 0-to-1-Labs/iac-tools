@@ -32,17 +32,18 @@ install as renamed.
 
 ### Requirements
 
-- Python 3.10 or later with the `venv` module. Scripts create their own
-  environment under the plugin data directory and never install into the
-  system Python.
-- For `security-scan` and `threat-model`: `checkov` (3.3.25 or later). Without
-  it the scan runs model-only and says `degraded: true`. `terraform` on PATH
-  enables `terraform validate` in `--fix`.
-- For `diagram-generator`: a Gemini API key in `GEMINI_API_KEY`
-  (https://aistudio.google.com/apikey).
-- Optional parser tiers for better Terraform and CloudFormation edges:
+- Python 3.10 or later.
+- `security-scan` and `threat-model` run with the Python on your PATH and need
+  `pip install -r requirements.txt` from the plugin directory (PyYAML, tfparse,
+  cfn-lint, ruamel.yaml, Checkov 3.3.25 or later). Without Checkov the scan
+  runs model-only and says `degraded: true`. `terraform` on PATH enables
+  `terraform validate` in `--fix`. Checkov does not install on Python 3.14
+  yet; use 3.12 or 3.13.
+- `diagram-generator` creates its own environment under the plugin data
+  directory on first run and never installs into the system Python. It needs
+  a Gemini API key in `GEMINI_API_KEY` (https://aistudio.google.com/apikey).
   `python3 ${CLAUDE_PLUGIN_ROOT}/skills/diagram-generator/scripts/parse_iac.py --install-optional`
-  installs `python-hcl2`, `tfparse`, and `cfn-lint` into the plugin environment.
+  adds `python-hcl2`, `tfparse`, and `cfn-lint` to that environment.
 
 ## Use
 
